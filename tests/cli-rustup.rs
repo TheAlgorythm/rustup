@@ -2251,7 +2251,7 @@ fn rust_hidden_toolchain_toml() {
 
 /// Ensures that `.rust-toolchain.toml` files (with `.toml` extension) only allow TOML contents
 #[test]
-fn only_toml_in_rust_hidden_toolchain_toml() {
+fn only_toml_in_hidden_rust_toolchain_toml() {
     setup(&|config| {
         let cwd = config.current_dir();
         let toolchain_file = cwd.join(".rust-toolchain.toml");
@@ -2261,6 +2261,26 @@ fn only_toml_in_rust_hidden_toolchain_toml() {
             config,
             &["rustc", "--version"],
             "error parsing override file",
+        );
+    });
+}
+
+/// Ensures that `.rust-toolchain.toml` files (with `.toml` extension) only allows strict (no `path`)
+#[test]
+fn strict_validation_in_hidden_rust_toolchain_toml() {
+    setup(&|config| {
+        let cwd = config.current_dir();
+        let toolchain_file = cwd.join(".rust-toolchain.toml");
+        raw::write_file(&toolchain_file, "[toolchain]\npath = \"some_dir\"").unwrap();
+
+        // TODO: use intended behaviour
+        expect_err(
+            config,
+            &["rustc", "--version"],
+            &format!(
+                "error: in {}: missing toolchain properties in toolchain override file",
+                toolchain_file.canonicalize().unwrap().display()
+            ),
         );
     });
 }

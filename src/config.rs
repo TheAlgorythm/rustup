@@ -660,10 +660,13 @@ impl Cfg {
             .filter_map(|toolchain_file_name| {
                 let toolchain_file_path = d.join(toolchain_file_name);
                 let content = utils::read_file("toolchain file", &toolchain_file_path).ok()?;
-                let parse_mode = if toolchain_file_name.ends_with(".toml") {
-                    ParseMode::OnlyToml
-                } else {
-                    ParseMode::Both
+                let parse_mode = match (
+                    toolchain_file_name.starts_with('.'),
+                    toolchain_file_name.ends_with(".toml"),
+                ) {
+                    (true, true) => ParseMode::OnlyStrictToml,
+                    (_, true) => ParseMode::OnlyToml,
+                    _ => ParseMode::Both,
                 };
                 Some((toolchain_file_path, content, parse_mode))
             })
@@ -710,7 +713,7 @@ impl Cfg {
     ) -> Result<OverrideFile> {
         let contents = contents.as_ref();
 
-        match (contents.lines().count(), parse_mode) {
+        match (contents.lines().count(), &parse_mode) {
             (0, _) => Err(anyhow!(OverrideFileConfigError::Empty)),
             (1, ParseMode::Both) => {
                 let channel = contents.trim();
@@ -722,8 +725,13 @@ impl Cfg {
                 }
             }
             _ => {
-                let override_file = toml::from_str::<OverrideFile>(contents)
+                let mut override_file = toml::from_str::<OverrideFile>(contents)
                     .context(OverrideFileConfigError::Parsing)?;
+
+                if parse_mode.is_strict() && override_file.toolchain.path.is_some() {
+                    // TODO: Error or warn/notify
+                    override_file.toolchain.path = None;
+                }
 
                 if override_file.is_empty() {
                     Err(anyhow!(OverrideFileConfigError::Invalid))
@@ -1023,6 +1031,10 @@ impl Cfg {
 
 /// Specifies how a `rust-toolchain`/`rust-toolchain.toml` configuration file should be parsed.
 enum ParseMode {
+    /// Only permit TOML format in a configuration file without some features like `path`.
+    ///
+    /// This variant is used for `.rust-toolchain.toml` files (with `.toml` extension).
+    OnlyStrictToml,
     /// Only permit TOML format in a configuration file.
     ///
     /// This variant is used for `rust-toolchain.toml` files (with `.toml` extension).
@@ -1033,6 +1045,12 @@ enum ParseMode {
     /// This variant is used for `rust-toolchain` files (no file extension) for backwards
     /// compatibility.
     Both,
+}
+
+impl ParseMode {
+    pub fn is_strict(&self) -> bool {
+        matches!(self, ParseMode::OnlyStrictToml)
+    }
 }
 
 #[cfg(test)]
