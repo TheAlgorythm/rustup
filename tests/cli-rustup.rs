@@ -2311,7 +2311,7 @@ fn warn_on_duplicate_rust_toolchain_and_hidden_file() {
 
 /// Checks that a warning occurs if both `rust-toolchain.toml` and `.rust-toolchain.toml` files exist
 #[test]
-fn warn_on_duplicate_rust_toolchain_toml_file() {
+fn warn_on_duplicate_rust_toolchain_toml_files() {
     setup(&|config| {
         let cwd = config.current_dir();
         let toolchain_file_1 = cwd.join("rust-toolchain.toml");
@@ -2326,6 +2326,31 @@ fn warn_on_duplicate_rust_toolchain_toml_file() {
                 "warning: both `{0}` and `{1}` exist. Using `{0}`",
                 toolchain_file_1.canonicalize().unwrap().display(),
                 toolchain_file_2.canonicalize().unwrap().display(),
+            ),
+        );
+    });
+}
+
+/// Checks that a warning occurs if all `rust-toolchain` `rust-toolchain.toml` and `.rust-toolchain.toml` files exist
+#[test]
+fn warn_on_all_rust_toolchain_files() {
+    setup(&|config| {
+        let cwd = config.current_dir();
+        let toolchain_file_1 = cwd.join("rust-toolchain");
+        raw::write_file(&toolchain_file_1, "stable").unwrap();
+        let toolchain_file_2 = cwd.join("rust-toolchain.toml");
+        raw::write_file(&toolchain_file_2, "[toolchain]\nchannel=\"stable\"").unwrap();
+        let toolchain_file_3 = cwd.join(".rust-toolchain.toml");
+        raw::write_file(&toolchain_file_3, "[toolchain]").unwrap();
+
+        expect_stderr_ok(
+            config,
+            &["rustc", "--version"],
+            &format!(
+                "warning: both `{0}` and `{1}` and `{2}` exist. Using `{0}`",
+                toolchain_file_1.canonicalize().unwrap().display(),
+                toolchain_file_2.canonicalize().unwrap().display(),
+                toolchain_file_3.canonicalize().unwrap().display(),
             ),
         );
     });
